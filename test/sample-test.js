@@ -1,19 +1,31 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+describe("Bridge", function () {
+  beforeEach(async function() {
+    [owner, bob, alice, relay, ..._] = await ethers.getSigners();
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+    const Token = await ethers.getContractFactory("Token");
+    token = await Token.deploy("Token", "Token");
+    await token.deployed();
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
+    const Bridge = await ethers.getContractFactory("Bridge");
+    bridge = await Bridge.deploy(relay.address, token.address);
+    await bridge.deployed();
 
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
+    token.approve(bob.address, 10000);
+    token.transfer(bob.address, 10000);
 
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
+    token.connect(bob).approve(bridge.address, 1000);
+
+    to_chain_id = 7777;
+  });
+
+  it("Lock and release single side", async function () {
+    const amt = 1000;
+    const begBal = await token.balanceOf(bridge.address);
+    await expect(bridge.connect(bob).lock(to_chain_id, alice.address, token.address, token.address, amt)).to.emit(bridge, 'LockEvent');
+    await expect(await token.balanceOf(bridge.address)).to.equal(begBal + amt);
+
   });
 });
